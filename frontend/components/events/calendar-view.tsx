@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Calendar, momentLocalizer } from 'react-big-calendar';
+import { Calendar, momentLocalizer, Views } from 'react-big-calendar';
 import moment from 'moment';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import '@/styles/calendar.css';
@@ -10,12 +10,10 @@ import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { EventDetailsDialog } from './event-details-dialog';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { isSameDay } from 'date-fns';
 
-// Setup the localizer
 const localizer = momentLocalizer(moment);
 
 type Event = {
@@ -26,6 +24,7 @@ type Event = {
   end_time: string;
   is_recurring: boolean;
   recurrence_rule?: any;
+  occurrences?: string[];
 };
 
 type CalendarEvent = {
@@ -41,19 +40,17 @@ type CalendarEvent = {
 export function CalendarView() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(
-    null
-  );
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [showEventDetails, setShowEventDetails] = useState(false);
+  const [currentDate, setCurrentDate] = useState(new Date());
   const router = useRouter();
   const { toast } = useToast();
 
   const fetchEvents = async (start: Date, end: Date) => {
     setLoading(true);
     try {
-      // Add 1 month padding to ensure we get all recurring events
-      const startDate = moment(start).subtract(1, 'month').format('YYYY-MM-DD');
-      const endDate = moment(end).add(1, 'month').format('YYYY-MM-DD');
+      const startDate = moment(start).format('YYYY-MM-DD');
+      const endDate = moment(end).format('YYYY-MM-DD');
 
       const response = await apiService.getEvents({
         start_date: startDate,
@@ -63,33 +60,26 @@ export function CalendarView() {
 
       const calendarEvents: CalendarEvent[] = [];
 
-      response.forEach((event: any) => {
+      response.forEach((event: Event) => {
         if (event.is_recurring && event.occurrences) {
-          // Add recurring event occurrences
           event.occurrences.forEach((occurrence: string) => {
-            const occurrenceStart = new Date(occurrence);
-            const originalStart = new Date(event.start_time);
-            const originalEnd = new Date(event.end_time);
-
-            // Calculate the time difference to maintain the same duration and time of day
-            const timeOfDay = {
-              hours: originalStart.getHours(),
-              minutes: originalStart.getMinutes(),
-              seconds: originalStart.getSeconds(),
-            };
-
-            // Set the same time of day for the occurrence
-            occurrenceStart.setHours(
-              timeOfDay.hours,
-              timeOfDay.minutes,
-              timeOfDay.seconds
-            );
-
-            // Calculate duration of the original event
+            const occurrenceDate = parseISO(occurrence);
+            const originalStart = parseISO(event.start_time);
+            const originalEnd = parseISO(event.end_time);
+            
+            // Calculate duration in milliseconds
             const duration = originalEnd.getTime() - originalStart.getTime();
-            const occurrenceEnd = new Date(
-              occurrenceStart.getTime() + duration
+            
+            // Create new start date with same time as original but on occurrence date
+            const occurrenceStart = new Date(occurrenceDate);
+            occurrenceStart.setHours(
+              originalStart.getHours(),
+              originalStart.getMinutes(),
+              originalStart.getSeconds()
             );
+            
+            // Create end date by adding duration
+            const occurrenceEnd = new Date(occurrenceStart.getTime() + duration);
 
             calendarEvents.push({
               id: `${event.id}-${occurrence}`,
@@ -101,16 +91,16 @@ export function CalendarView() {
               occurrenceDate: occurrence,
             });
           });
-        } else {
-          // Add single event
-          calendarEvents.push({
-            id: event.id,
-            title: event.title,
-            start: new Date(event.start_time),
-            end: new Date(event.end_time),
-            originalEvent: event,
-          });
         }
+
+        // Always add the original event
+        calendarEvents.push({
+          id: event.id,
+          title: event.title,
+          start: parseISO(event.start_time),
+          end: parseISO(event.end_time),
+          originalEvent: event,
+        });
       });
 
       setEvents(calendarEvents);
@@ -120,22 +110,20 @@ export function CalendarView() {
         description: 'Failed to load events',
         variant: 'destructive',
       });
+      console.error('Error fetching events:', error);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    // Get current month's start and end
-    const start = moment().startOf('month').toDate();
-    const end = moment().endOf('month').toDate();
+    const start = moment(currentDate).startOf('month').toDate();
+    const end = moment(currentDate).endOf('month').toDate();
     fetchEvents(start, end);
-  }, []);
+  }, [currentDate]);
 
-  const handleRangeChange = (range: any) => {
-    if (range.start && range.end) {
-      fetchEvents(range.start, range.end);
-    }
+  const handleNavigate = (newDate: Date) => {
+    setCurrentDate(newDate);
   };
 
   const handleSelectEvent = (event: CalendarEvent) => {
@@ -143,9 +131,15 @@ export function CalendarView() {
     setShowEventDetails(true);
   };
 
-  const handleSelectSlot = ({ start, end }: { start: Date; end: Date }) => {
+  const handleSelectSlot = (slotInfo: { start: Date; end: Date }) => {
+    const { start, end } = slotInfo;
+    // Adjust end time if it's the same as start (default 30 min duration)
+    const adjustedEnd = start.getTime() === end.getTime() 
+      ? new Date(start.getTime() + 30 * 60000) 
+      : end;
+      
     router.push(
-      `/dashboard/new-event?start=${start.toISOString()}&end=${end.toISOString()}`
+      `/dashboard/new-event?start=${start.toISOString()}&end=${adjustedEnd.toISOString()}`
     );
   };
 
@@ -168,48 +162,33 @@ export function CalendarView() {
           onSelectEvent={handleSelectEvent}
           onSelectSlot={handleSelectSlot}
           selectable
-          onRangeChange={handleRangeChange}
-          views={['month', 'week', 'day']}
-          defaultView="month"
+          onNavigate={handleNavigate}
+          date={currentDate}
+          onRangeChange={() => {}}
+          views={[Views.MONTH, Views.WEEK, Views.DAY]}
+          defaultView={Views.MONTH}
           style={{ height: '100%' }}
           formats={{
-            timeGutterFormat: (date: Date) => format(date, 'h:mm a'),
-            eventTimeRangeFormat: ({
-              start,
-              end,
-            }: {
-              start: Date;
-              end: Date;
-            }) => `${format(start, 'h:mm a')} - ${format(end, 'h:mm a')}`,
-            dayRangeHeaderFormat: ({
-              start,
-              end,
-            }: {
-              start: Date;
-              end: Date;
-            }) => `${format(start, 'MMM d')} - ${format(end, 'MMM d, yyyy')}`,
-            dayFormat: (date: Date) => format(date, 'd'),
-            monthHeaderFormat: (date: Date) => format(date, 'MMMM yyyy'),
-            dayHeaderFormat: (date: Date) => format(date, 'cccc MM/dd'),
-            weekdayFormat: (date: Date) => format(date, 'EEE'),
+            timeGutterFormat: 'h:mm a',
+            eventTimeRangeFormat: ({ start, end }: { start: Date; end: Date }) => 
+              `${format(start, 'h:mm a')} - ${format(end, 'h:mm a')}`,
+            dayRangeHeaderFormat: ({ start, end }: { start: Date; end: Date }) =>
+              `${format(start, 'MMM d')} - ${format(end, 'MMM d, yyyy')}`,
           }}
           components={{
-            event: (props: any) => (
+            event: ({ event }: { event: CalendarEvent }) => (
               <div
-                className={`p-1 text-sm truncate ${
-                  props.event.isOccurrence
+                className={`p-1 text-sm truncate rounded ${
+                  event.isOccurrence
                     ? 'bg-blue-100 text-blue-800 border border-blue-300'
                     : 'bg-primary text-primary-foreground'
-                } rounded`}
-                title={`${props.title}\n${format(
-                  props.event.start,
-                  'h:mm a'
-                )} - ${format(props.event.end, 'h:mm a')}`}
+                }`}
+                title={`${event.title}\n${format(event.start, 'h:mm a')} - ${format(event.end, 'h:mm a')}`}
               >
-                {props.title}
+                {event.title}
               </div>
             ),
-            toolbar: (props: any) => (
+            toolbar: (props) => (
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <Button
@@ -240,7 +219,7 @@ export function CalendarView() {
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  {['month', 'week', 'day'].map((view) => (
+                  {[Views.MONTH, Views.WEEK, Views.DAY].map((view) => (
                     <Button
                       key={view}
                       variant={props.view === view ? 'default' : 'outline'}
@@ -253,37 +232,28 @@ export function CalendarView() {
                 </div>
               </div>
             ),
-            timeSlotWrapper: (props: any) => (
-              <div className="text-xs text-gray-500 bg-gray-50/50" {...props} />
-            ),
           }}
-          dayPropGetter={(date: Date) => ({
-            className: 'font-medium',
+          eventPropGetter={(event) => ({
             style: {
-              backgroundColor: isSameDay(date, new Date())
-                ? 'rgb(243 244 246)'
-                : 'transparent',
+              backgroundColor: event.isOccurrence ? '#dbeafe' : '#3b82f6',
+              color: event.isOccurrence ? '#1e40af' : 'white',
+              borderColor: event.isOccurrence ? '#93c5fd' : '#3b82f6',
             },
-          })}
-          slotPropGetter={(date: Date) => ({
-            className: 'border-gray-100',
           })}
         />
       </div>
 
-      {selectedEvent && (
-        <EventDetailsDialog
-          event={selectedEvent}
-          isOpen={showEventDetails}
-          onClose={() => setShowEventDetails(false)}
-          onEdit={() => {
-            router.push(
-              `/dashboard/edit-event/${selectedEvent.originalEvent.id}`
-            );
+      <EventDetailsDialog
+        event={selectedEvent}
+        isOpen={showEventDetails}
+        onClose={() => setShowEventDetails(false)}
+        onEdit={() => {
+          if (selectedEvent) {
+            router.push(`/dashboard/edit-event/${selectedEvent.originalEvent.id}`);
             setShowEventDetails(false);
-          }}
-        />
-      )}
+          }
+        }}
+      />
     </>
   );
 }
