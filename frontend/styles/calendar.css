@@ -1,0 +1,125 @@
+/* Calendar container */
+.rbc-calendar {
+  @apply font-sans;
+}
+
+/* Header */
+.rbc-toolbar {
+  @apply mb-4;
+}
+
+.rbc-toolbar-label {
+  @apply text-lg font-semibold;
+}
+
+/* Month view */
+.rbc-month-view {
+  @apply border border-gray-200 rounded-lg overflow-hidden;
+}
+
+.rbc-month-header {
+  @apply bg-gray-50 border-b border-gray-200;
+}
+
+.rbc-header {
+  @apply py-2 text-sm font-medium text-gray-600 border-b border-gray-200;
+}
+
+.rbc-month-row {
+  @apply border-b border-gray-200;
+}
+
+.rbc-date-cell {
+  @apply p-1 text-sm text-right;
+}
+
+.rbc-off-range-bg {
+  @apply bg-gray-50/50;
+}
+
+.rbc-today {
+  @apply bg-blue-50/50;
+}
+
+/* Week and Day view */
+.rbc-time-view {
+  @apply border border-gray-200 rounded-lg overflow-hidden;
+}
+
+.rbc-time-header {
+  @apply border-b border-gray-200;
+}
+
+.rbc-time-content {
+  @apply border-t border-gray-200;
+}
+
+.rbc-timeslot-group {
+  @apply border-b border-gray-100;
+}
+
+.rbc-time-slot {
+  @apply text-xs text-gray-500;
+}
+
+/* Events */
+.rbc-event {
+  @apply rounded-md border-none shadow-sm;
+  background-color: var(--event-bg-color, theme('colors.primary.DEFAULT'));
+  color: var(--event-text-color, theme('colors.primary.foreground'));
+}
+
+.rbc-event.rbc-selected {
+  @apply outline-none ring-2 ring-primary ring-offset-2;
+}
+
+.rbc-event-label {
+  @apply text-xs font-medium;
+}
+
+.rbc-event-content {
+  @apply text-sm font-medium;
+}
+
+/* Time grid */
+.rbc-time-gutter .rbc-timeslot-group {
+  @apply border-r border-gray-200;
+}
+
+/* Current time indicator */
+.rbc-current-time-indicator {
+  @apply bg-red-500;
+}
+
+/* Hover and interaction states */
+.rbc-day-bg:hover {
+  @apply bg-gray-50/75 transition-colors;
+}
+
+.rbc-off-range:hover {
+  @apply bg-gray-100/50;
+}
+
+/* Selection highlight */
+.rbc-slot-selecting {
+  @apply bg-primary/10;
+}
+
+.rbc-selected-cell {
+  @apply bg-primary/10;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .rbc-toolbar {
+    @apply flex-col gap-2;
+  }
+
+  .rbc-toolbar-label {
+    @apply text-base order-1;
+  }
+
+  .rbc-btn-group {
+    @apply w-full justify-center;
+  }
+}
