@@ -1,19 +1,18 @@
 FROM node:18-alpine
 
-ENV NODE_ENV=production
+RUN npm install -g pnpm
 
+ENV NODE_ENV=development  
 WORKDIR /app
 
-# Install dependencies
-COPY package.json package-lock.json ./
-RUN npm install --production
+COPY package.json pnpm-lock.yaml ./
 
-# Copy project files
+RUN pnpm install
+
+
 COPY . .
+RUN pnpm run build
 
-# Build the application
-RUN npm run build
+EXPOSE 3000  
 
-EXPOSE 3000
-
-CMD ["npm", "run", "dev"]
+CMD ["pnpm", "run", "dev"]
